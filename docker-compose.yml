@@ -1,0 +1,64 @@
+version: '3'
+
+services:
+
+  pio_db:
+    image: postgres:9.6
+    environment:
+      - POSTGRES_USER=predictionio
+      - POSTGRES_PASSWORD=1234
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.5.3
+    restart: always
+    environment:
+      - "cluster.name=pio"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch"
+      - "bootstrap.memory_lock=true"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "xpack.security.enabled=false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  pio_events:
+    build:
+      context: .
+      args:
+        PIO_VERSION: 0.12.1
+    image: predictionio
+    restart: always
+    depends_on:
+      - pio_db
+      - elasticsearch
+    command: /etc/service/pio_events
+    ports:
+      - 7070:7070
+
+  pio_app:
+    build:
+      context: .
+      args:
+        PIO_VERSION: 0.12.1
+        PIO_ENGINE: https://github.com/apache/predictionio-template-similar-product
+        PIO_APP_NAME: mysite-similar-vacancies
+        PIO_APP_KEY: M41jRfbEXGoHTxyLbn6jxpL2xnfoyxz_Psm0AMfSbzNBXOWphHO3Q1GfOUg3P6O5
+    image: predictionio
+    restart: always
+    depends_on:
+      - pio_events
+      - pio_db
+      - elasticsearch
+    command: /etc/service/pio_app
+    ports:
+      - 8000:8000
+
+volumes:
+  postgres_data:
