@@ -1,17 +1,19 @@
 # Download pio
 FROM appropriate/curl as pio_download
-ARG PIO_VERSION
-RUN curl -L http://apache.forthnet.gr/predictionio/${PIO_VERSION}/apache-predictionio-${PIO_VERSION}-bin.tar.gz -o /tmp/apache-predictionio.tar.gz
+ARG PIO_VERSION=0.12.1
+RUN curl -L http://apache.forthnet.gr/predictionio/${PIO_VERSION}/apache-predictionio-${PIO_VERSION}-bin.tar.gz | tar xz -C /tmp \
+    && mv /tmp/PredictionIO-${PIO_VERSION}/ /tmp/pio/
 
 # Download spark
 FROM appropriate/curl as spark_download
-ENV SPARK_VERSION 2.1.1
-RUN curl -L http://d3kbcqa49mib13.cloudfront.net/spark-${SPARK_VERSION}-bin-hadoop2.6.tgz -o /tmp/spark.tar.gz
+ARG SPARK_VERSION=2.1.1
+RUN curl -L http://d3kbcqa49mib13.cloudfront.net/spark-${SPARK_VERSION}-bin-hadoop2.6.tgz | tar xz -C /tmp \
+    && mv /tmp/spark-${SPARK_VERSION}-bin-hadoop2.6 /tmp/spark
 
 # Download jdbc driver
 FROM appropriate/curl as jdbc_download
-ENV JDBC_PGSQL_VERSION 42.2.2
-RUN curl -L https://jdbc.postgresql.org/download/postgresql-${JDBC_PGSQL_VERSION}.jar -o /tmp/postgresql-${JDBC_PGSQL_VERSION}.jar
+ARG JDBC_PGSQL_VERSION=42.2.2
+RUN curl -L https://jdbc.postgresql.org/download/postgresql-${JDBC_PGSQL_VERSION}.jar -o /tmp/postgresql.jar
 
 # Download scala
 FROM appropriate/curl as scala_download
@@ -42,34 +44,21 @@ FROM base as pio
 ENV PIO_HOME /opt/pio
 ENV PATH=${PIO_HOME}/bin:$PATH
 
-ARG PIO_VERSION
-COPY --from=pio_download /tmp/apache-predictionio.tar.gz /tmp/apache-predictionio.tar.gz
-RUN tar zxvf /tmp/apache-predictionio.tar.gz -C /tmp \
-    && mkdir ${PIO_HOME} && mv -T /tmp/PredictionIO-${PIO_VERSION}/ ${PIO_HOME} \
-    && mkdir ${PIO_HOME}/vendors
+# Install prediction io
+COPY --from=pio_download /tmp/pio/ ${PIO_HOME}
 
 # install spark
-ENV SPARK_VERSION 2.1.1
-COPY --from=spark_download /tmp/spark.tar.gz /tmp/spark.tar.gz
-RUN tar -xvzf /tmp/spark.tar.gz -C ${PIO_HOME}/vendors
+COPY --from=spark_download /tmp/spark ${PIO_HOME}/vendors/spark
 
 # install postgresql jdbc driver
-ENV JDBC_PGSQL_VERSION 42.2.2
-COPY --from=jdbc_download /tmp/postgresql-${JDBC_PGSQL_VERSION}.jar ${PIO_HOME}/vendors/postgresql-${JDBC_PGSQL_VERSION}.jar
+COPY --from=jdbc_download /tmp/postgresql.jar ${PIO_HOME}/vendors/postgresql.jar
 
-# install the template engine
-ARG PIO_ENGINE=''
-ARG PIO_APP_NAME=''
-RUN if [ "x$PIO_ENGINE" != "x" -a "x$PIO_APP_NAME" != "x" ] ; then mkdir /apps/ && git clone ${PIO_ENGINE} /apps/${PIO_APP_NAME} && cd /apps/${PIO_APP_NAME}/ && pio build ; fi
-
-# Configure the template engine for the app
-ARG PIO_APP_KEY=''
-RUN if [ "x$PIO_APP_KEY" != "x" ]; then cd /apps/$PIO_APP_NAME/ \
-    && sed -i "s/INVALID_APP_NAME/$PIO_APP_NAME/" engine.json ; fi;
-
-# Configure PIO settings
+# configure the environment
 COPY config/pio-env.sh /opt/pio/conf/pio-env.sh
-ENV PIO_APP_NAME $PIO_APP_NAME
-ENV PIO_APP_KEY $PIO_APP_KEY
-COPY config/pio_app.sh /etc/service/pio_app
 COPY config/pio_events.sh /etc/service/pio_events
+COPY config/pio_app.sh /etc/service/pio_app
+
+RUN mkdir -p /app
+WORKDIR /app
+
+CMD /etc/service/pio_events

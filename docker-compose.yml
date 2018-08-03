@@ -1,4 +1,4 @@
-version: '3'
+version: '3.6'
 
 services:
 
@@ -8,7 +8,7 @@ services:
       - POSTGRES_USER=predictionio
       - POSTGRES_PASSWORD=1234
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - piodata:/var/lib/postgresql/data
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:5.5.3
@@ -23,42 +23,51 @@ services:
       memlock:
         soft: -1
         hard: -1
-    deploy:
-      resources:
-        limits:
-          memory: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
 
   pio_events:
     build:
       context: .
-      args:
-        PIO_VERSION: 0.12.1
-    image: predictionio
     restart: always
     depends_on:
       - pio_db
       - elasticsearch
-    command: /etc/service/pio_events
     ports:
       - 7070:7070
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7070"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
 
   pio_app:
     build:
       context: .
-      args:
-        PIO_VERSION: 0.12.1
-        PIO_ENGINE: https://github.com/apache/predictionio-template-similar-product
-        PIO_APP_NAME: mysite-similar-vacancies
-        PIO_APP_KEY: M41jRfbEXGoHTxyLbn6jxpL2xnfoyxz_Psm0AMfSbzNBXOWphHO3Q1GfOUg3P6O5
-    image: predictionio
     restart: always
+    env_file:
+      - .env
     depends_on:
       - pio_events
       - pio_db
       - elasticsearch
+    volumes:
+      - home:/root
+      - app:/app
     command: /etc/service/pio_app
     ports:
       - 8000:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
-  postgres_data:
+  piodata:
+  app:
+  home:

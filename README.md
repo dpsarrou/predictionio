@@ -1,52 +1,85 @@
-# Apache PredictionIO with docker-compose
+# Apache PredictionIO in docker
 
-Run Apache Prediction IO in configurable docker services.
-You can configure the template
+Run Apache Prediction IO using docker.
+Features include being able to select the template engine as long as it supports
+the default setup: (clone, build, rename engine.json, train, deploy).
+For custom actions please refer to `Makefile` and `config/pio_app.sh`
 
 ## Requirements
 
 - Docker
 - Docker-compose (if using DockerForMac this is already included)
 
-## Services
+## Installation
 
-This will setup the following services:
+We need to setup some environment variables first.
+- Step 1. Copy `.env.example` to `.env`. In that file adjust the parameter values according
+    to your needs.
 
-- pio_db: A Postgres database that will store the events and the model
-- elasticsearch: An elasticsearch 5.5.x database
-- pio_events: The predictionIO service that gathers all events and listens to 7070 port
-- pio_app: The predictionIO app service that hosts the prediction engine and allows for quering predictions on port 8000.
-
-You should read `docker-compose.yml` for more details.
+- Step 2. Run `make build` to build the containers and the recommendation engine.
 
 ## Usage
 
-Run `docker-compose up -d`. This will automatically download the required base images, build (if not already) and start the services.
-If you want the resource limits to be applied, run it with compatibility flag, since docker-compose.yml v3 deprecated those in favor of deployment limits in docker swarm. `docker-compose --compatibility up -d`
+- Run `make app` to start the application.
 
-You can then access the services using the `PIO_APP_KEY` you have defined for your app in `docker-compose.yml` file:
+- Run `make stop` to stop the application.
 
-- Submit and store events: http://localhost:7070/events.json?accessKey=M41jRfbEXGoHTxyLbn6jxpL2xnfoyxz_Psm0AMfSbzNBXOWphHO3Q1GfOUg3P6O5
-- Query for predictions: http://localhost:8000
+- Run `make clean` to stop the application and delete all data.
 
-## Notes:
+To submit data to the recommendation engine for your app make http request to `http://localhost:7070/events.json?accessKey=M41jRfbEXGoHTxyLbn6jxpL2xnfoyxz_Psm0AMfSbzNBXOWphHO3Q1GfOUg3P6O5` where
+`accessKey` is the value of `PIO_APP_KEY` as defined in the `.env` file.
 
-You need to submit data to the event store in order for the prediction query service to be able to train a model. If you cannot access the prediction service at http://localhost:8000 then it most probably means you did not input any data. 
+To query data and predictions make http requests to `http://localhost:8000`.
 
-For some temporary data use the script `./data/importdata.sh` that will do a couple of HTTP requests to feed the engine.
-**After you have inputted data, it will take about 1 minute for the http://localhost:8000 page to be accessible.**
-For official examples check https://predictionio.apache.org/templates/similarproduct/quickstart/, specifically section 4. Collecting Data and later, as the previous steps are already done.
+You can read more about what kind of data you can send and query on https://predictionio.apache.org/templates/similarproduct/quickstart/ specifically Step 4 and on. This repository has already implemented the previous steps.
+
+## Troubleshooting & FAQ
+
+- If you cannot access the query service at `http://localhost:8000` this probably because
+you have not sent any events to the events service. To be able to train a model and query for 
+predictions you must first record some events.
+
+- You need to send your own data, but if you want to play around with some sample data run `make sampledata`. This will run the script `./data/importdata.sh` which will do a couple of HTTP requests to feed the engine.
+
+- The first build of a template engine is very slow. For reference 
+building the Similar-Product engine for the first time takes ~30minutes on a late 2017 macbook.
+
+**After you have inputted data, it might take about 1 minute for the http://localhost:8000 page to be accessible.**
+
+## Services
+
+The following services are defined:
+
+- pio_db: A Postgres database that will store the events and the model
+- elasticsearch: An elasticsearch database for the model metadata
+- pio_events: The events service that records all events. Access it on http://localhost:7070
+- pio_app: The recommendation service that hosts the prediction engine and allows for quering predictions on port http://localhost:8000.
+
+You can read `docker-compose.yml` for more details.
 
 ## Template Engines
 
 This setup has been tested with the Similar-Product engine.
-You can find example of events you can send and more info here:
+You can find example of events you can send and more info in the official documentation:
 https://predictionio.apache.org/templates/similarproduct/quickstart/
 
+More engines that use the same installation steps are supported.
+You can do that changing the `.env` file:
 
-It also includes some of the heavy work needed for running the latest version of the Universal Recommender engine. However that version has very specific build tasks, including a custom build of Apache Mahout that delays the process a lot and requires some changes in config files that will simply take much time to make generic and support in this setup. Therefore I've included the tedious custom built tasks of Mahout, but you will need to configure and build the engine on your own. I'm looking at a potential solution of having a custom installation script per engine that can be defined in docker-compose as a build Arg. I will evaluate that approach some time later if I have the free time.
+1. Setting `PIO_ENGINE` to the url of the template engine. You can find template engines on https://predictionio.apache.org/gallery/template-gallery/
 
+2. Run `make engine` to build the engine. Note that you need to clean your data and installation if you already had installed a different engine before. Use `make clean` to do that.
 
+## About the approach
 
+1. Dockerfile: I used multistage builds for docker to take advantage of caching layers and to 
+prevent rebuilding the whole image when updating version of a single vendor dependency.
 
+2. Template engine: The template engine is been downloaded and built after the containers
+have started and not in the Dockerfile build process. This is to allow for different
+template engines to be used with the same platform, configurable from the environment
+variables.
 
+3. Persistent storage: In order to minimize the time spent building the recommendation engine
+(it really took >30minutes on my machine) `named volumes` are used to persist the
+home directory. This speeds up considerably subsequent engine builds (now take ~5 seconds).
