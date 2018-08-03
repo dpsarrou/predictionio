@@ -24,16 +24,18 @@ You should read `docker-compose.yml` for more details.
 Run `docker-compose up -d`. This will automatically download the required base images, build (if not already) and start the services.
 If you want the resource limits to be applied, run it with compatibility flag, since docker-compose.yml v3 deprecated those in favor of deployment limits in docker swarm. `docker-compose --compatibility up -d`
 
-You can then access the services using the accessKey you have defined for your app in docker-compose.yml:
+You can then access the services using the `PIO_APP_KEY` you have defined for your app in `docker-compose.yml` file:
 
-- Submit and store events: http://localhost:7070/events.json?accessKey=
+- Submit and store events: http://localhost:7070/events.json?accessKey=M41jRfbEXGoHTxyLbn6jxpL2xnfoyxz_Psm0AMfSbzNBXOWphHO3Q1GfOUg3P6O5
 - Query for predictions: http://localhost:8000
 
 ## Notes:
 
-You need to submit data to the event store in order for the prediction query service to be able to train a model. If you cannot access the prediction service at http://localhost:8000 then it most probably means you did not input any data.
+You need to submit data to the event store in order for the prediction query service to be able to train a model. If you cannot access the prediction service at http://localhost:8000 then it most probably means you did not input any data. 
 
 For some temporary data use the script `./data/importdata.sh` that will do a couple of HTTP requests to feed the engine.
+**After you have inputted data, it will take about 1 minute for the http://localhost:8000 page to be accessible.**
+For official examples check https://predictionio.apache.org/templates/similarproduct/quickstart/, specifically section 4. Collecting Data and later, as the previous steps are already done.
 
 ## Template Engines
 
